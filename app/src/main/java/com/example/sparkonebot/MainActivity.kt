@@ -3,6 +3,8 @@ package com.example.sparkonebot
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,7 @@ import java.io.IOException
 import java.io.Serializable
 import java.net.InetAddress
 import java.net.SocketTimeoutException
+import java.util.*
 import androidx.compose.material.icons.rounded.Phone
 
 val MyAppIcons = Icons.Rounded
@@ -48,6 +51,7 @@ class MainActivity : ComponentActivity() {
     private val apiService = ApiService.create()
     private val coroutineScope = MainScope()
     private val chatState = mutableStateOf(ChatState())
+    private var textToSpeech: TextToSpeech? = null
 
     companion object {
         private const val SPEECH_REQUEST_CODE = 1
@@ -55,6 +59,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        textToSpeech = TextToSpeech(this, TextToSpeech.OnInitListener { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech?.language = Locale.US
+            }
+        })
 
         setContent {
             SparkOneBotTheme {
@@ -116,11 +126,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+    }
+
     private fun handleApiResponse(response: ApiResponse) {
         if (response.choices.isNotEmpty()) {
             val message = response.choices[0].message
             chatState.value = chatState.value.copy(messages = chatState.value.messages + message)
+            speak(message.content)
         }
+    }
+
+    private fun speak(text: String) {
+        val utteranceId = UUID.randomUUID().toString()
+        textToSpeech?.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId)
     }
 
     private fun pingHost(host: String): Boolean {
@@ -212,6 +234,23 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    fun MessageItem(message: Message) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row {
+                Text(
+                    text = "${message.role}: ",
+                    color = Color.Green,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(
+                    text = message.content,
+                    color = Gold
+                )
+            }
+        }
+    }
+
+    @Composable
     fun PingResult(host: String) {
         val hostReachable = remember { mutableStateOf(false) }
         val coroutineScope = rememberCoroutineScope()
@@ -227,23 +266,6 @@ class MainActivity : ComponentActivity() {
             color = if (hostReachable.value) Color.Green else Color.Red,
             modifier = Modifier.padding(16.dp)
         )
-    }
-}
-
-@Composable
-fun MessageItem(message: Message) {
-    Column(modifier = Modifier.padding(16.dp)) {
-        Row {
-            Text(
-                text = "${message.role}: ",
-                color = Color.Green,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text(
-                text = "${message.content}",
-                color = Gold
-            )
-        }
     }
 }
 
