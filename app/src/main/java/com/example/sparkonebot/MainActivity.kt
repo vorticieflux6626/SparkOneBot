@@ -1,32 +1,36 @@
 package com.example.sparkonebot
 
+import android.content.Intent
 import android.os.Bundle
+import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Button
-import androidx.compose.ui.text.TextStyle
-import com.example.sparkonebot.ui.theme.Navy
-import com.example.sparkonebot.ui.theme.Gold
+import androidx.compose.material.Icon
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.material.TextField
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import com.example.sparkonebot.ui.theme.Gold
+import com.example.sparkonebot.ui.theme.Navy
 import com.example.sparkonebot.ui.theme.SparkOneBotTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -36,11 +40,18 @@ import java.io.IOException
 import java.io.Serializable
 import java.net.InetAddress
 import java.net.SocketTimeoutException
+import androidx.compose.material.icons.rounded.Phone
+
+val MyAppIcons = Icons.Rounded
 
 class MainActivity : ComponentActivity() {
     private val apiService = ApiService.create()
     private val coroutineScope = MainScope()
     private val chatState = mutableStateOf(ChatState())
+
+    companion object {
+        private const val SPEECH_REQUEST_CODE = 1
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +104,15 @@ class MainActivity : ComponentActivity() {
         val savedChatState = savedInstanceState.getSerializable("chatState") as? ChatState
         if (savedChatState != null) {
             chatState.value = savedChatState
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK) {
+            val spokenText = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.get(0)
+            chatState.value = chatState.value.copy(inputText = spokenText ?: "")
         }
     }
 
@@ -166,6 +186,25 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Text("Send")
                 }
+
+                Button(
+                    onClick = {
+                        // Launch speech recognition
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                        intent.putExtra(
+                            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                        )
+                        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now")
+                        startActivityForResult(intent, SPEECH_REQUEST_CODE)
+                    },
+                    modifier = Modifier.padding(start = 16.dp)
+                ) {
+                    Icon(
+                        imageVector = MyAppIcons.Phone,
+                        contentDescription = "Microphone"
+                    )
+                }
             }
 
             PingResult(host = "74.137.26.51")
@@ -194,10 +233,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MessageItem(message: Message) {
     Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            text = "${message.role}: ${message.content}",
-            color = Gold
-        )
+        Row {
+            Text(
+                text = "${message.role}: ",
+                color = Color.Green,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text(
+                text = "${message.content}",
+                color = Gold
+            )
+        }
     }
 }
 
