@@ -3,6 +3,9 @@ package com.example.sparkonebot
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,13 +13,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Button
-import androidx.compose.material.MaterialTheme
+import androidx.compose.ui.text.TextStyle
+import com.example.sparkonebot.ui.theme.Navy
+import com.example.sparkonebot.ui.theme.Gold
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.material.TextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -24,23 +28,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.sparkonebot.ui.theme.SparkOneBotTheme
-import com.example.sparkonebot.ApiService
-import com.example.sparkonebot.ApiResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.io.Serializable
 import java.net.InetAddress
 import java.net.SocketTimeoutException
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val apiService = ApiService.create()
     private val coroutineScope = MainScope()
-    private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    private val chatState = mutableStateOf(ChatState())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,11 +49,10 @@ class MainActivity : ComponentActivity() {
             SparkOneBotTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colors.background
+                    color = Navy
                 ) {
-                    val chatMessages = remember { mutableStateListOf<Message>() }
                     ChatScreen(
-                        chatMessages = chatMessages,
+                        chatState = chatState,
                         onSendPrompt = { prompt ->
                             coroutineScope.launch {
                                 try {
@@ -66,36 +65,48 @@ class MainActivity : ComponentActivity() {
                                         )
                                     )
                                     val response = apiService.generateResponse(apiRequest)
-                                    handleApiResponse(response, chatMessages)
+                                    handleApiResponse(response)
                                 } catch (e: SocketTimeoutException) {
-                                    // Handle the timeout error
-                                    // Add a system message to the chat dialog
                                     val timeoutMessage = Message(
                                         role = "system",
                                         content = "Socket Timeout Exception"
                                     )
-                                    chatMessages.add(timeoutMessage)
+                                    chatState.value = chatState.value.copy(
+                                        messages = chatState.value.messages + timeoutMessage
+                                    )
                                 }
                             }
-                        },
-                        dateFormat = dateFormat
+                        }
                     )
                 }
             }
         }
     }
 
-    private fun handleApiResponse(response: ApiResponse, chatMessages: MutableList<Message>) {
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putSerializable("chatState", chatState.value)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        val savedChatState = savedInstanceState.getSerializable("chatState") as? ChatState
+        if (savedChatState != null) {
+            chatState.value = savedChatState
+        }
+    }
+
+    private fun handleApiResponse(response: ApiResponse) {
         if (response.choices.isNotEmpty()) {
             val message = response.choices[0].message
-            chatMessages.add(message)
+            chatState.value = chatState.value.copy(messages = chatState.value.messages + message)
         }
     }
 
     private fun pingHost(host: String): Boolean {
         return try {
             val inetAddress = InetAddress.getByName(host)
-            inetAddress.isReachable(30000) // 30000 millisecond timeout
+            inetAddress.isReachable(3000000)
         } catch (e: IOException) {
             false
         }
@@ -109,34 +120,46 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun ChatScreen(
-        chatMessages: MutableList<Message>,
-        onSendPrompt: (String) -> Unit,
-        dateFormat: SimpleDateFormat
+        chatState: MutableState<ChatState>,
+        onSendPrompt: (String) -> Unit
     ) {
-        val inputText = remember { mutableStateOf("") }
+        val scrollState = rememberLazyListState()
+
+        LaunchedEffect(chatState.value.messages.size) {
+            if (chatState.value.messages.isNotEmpty()) {
+                scrollState.animateScrollToItem(chatState.value.messages.size - 1)
+            }
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(chatMessages) { message ->
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                state = scrollState,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                items(chatState.value.messages) { message ->
                     MessageItem(message)
                 }
             }
 
             Row(modifier = Modifier.padding(16.dp)) {
                 TextField(
-                    value = inputText.value,
-                    onValueChange = { inputText.value = it },
-                    modifier = Modifier.weight(1f)
+                    value = chatState.value.inputText,
+                    onValueChange = { chatState.value = chatState.value.copy(inputText = it) },
+                    modifier = Modifier.weight(1f),
+                    textStyle = TextStyle(color = Gold)
                 )
 
                 Button(
                     onClick = {
-                        val prompt = inputText.value.trim()
+                        val prompt = chatState.value.inputText.trim()
                         if (prompt.isNotEmpty()) {
                             val message = Message("user", prompt)
-                            chatMessages.add(message)
+                            chatState.value = chatState.value.copy(
+                                messages = chatState.value.messages + message,
+                                inputText = ""
+                            )
                             onSendPrompt(prompt)
-                            inputText.value = ""
                         }
                     },
                     modifier = Modifier.padding(start = 16.dp)
@@ -145,8 +168,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Add the PingResult composable
-            PingResult(host = "192.168.1.176") // Replace with your host IP address
+            PingResult(host = "74.137.26.51")
         }
     }
 
@@ -161,7 +183,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Display the ping result
         Text(
             text = if (hostReachable.value) "Remote Host Reachable" else "Remote Host Unreachable",
             color = if (hostReachable.value) Color.Green else Color.Red,
@@ -173,6 +194,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MessageItem(message: Message) {
     Column(modifier = Modifier.padding(16.dp)) {
-        Text(text = "${message.role}: ${message.content}")
+        Text(
+            text = "${message.role}: ${message.content}",
+            color = Gold
+        )
     }
 }
+
+data class ChatState(
+    val messages: List<Message> = emptyList(),
+    val inputText: String = ""
+) : Serializable
+
+data class Message(
+    val role: String,
+    val content: String
+) : Serializable

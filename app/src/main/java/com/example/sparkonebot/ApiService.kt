@@ -4,18 +4,27 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 interface ApiService {
     @POST("/v1/chat/completions")
     suspend fun generateResponse(@Body request: ApiRequest): ApiResponse
 
     companion object {
-        private const val BASE_URL = "http://192.168.1.176:5000/"
+        private const val BASE_URL = "http://74.137.26.51:5000/"
 
         fun create(): ApiService {
+            val client = OkHttpClient.Builder()
+                .connectTimeout(600, TimeUnit.SECONDS) // Increase the connect timeout
+                .readTimeout(600, TimeUnit.SECONDS) // Increase the read timeout
+                .writeTimeout(600, TimeUnit.SECONDS) // Increase the write timeout
+                .build()
+
             val retrofit = Retrofit.Builder()
                 .baseUrl(BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create())
+                .client(client)
                 .build()
             return retrofit.create(ApiService::class.java)
         }
@@ -26,11 +35,6 @@ data class ApiRequest(
     val messages: List<Message>,
     val mode: String = "instruct",
     val instruction_template: String = "Alpaca"
-)
-
-data class Message(
-    val role: String,
-    val content: String
 )
 
 data class ApiResponse(
