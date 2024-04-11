@@ -45,7 +45,10 @@ import java.net.SocketTimeoutException
 import java.util.*
 import androidx.compose.material.icons.rounded.Phone
 
+// Global Variables
 val MyAppIcons = Icons.Rounded
+val hostReachable = mutableStateOf(false)
+const val SparkOneBrain: String = "74.137.26.51"
 
 class MainActivity : ComponentActivity() {
     private val apiService = ApiService.create()
@@ -59,6 +62,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Check host reachability on startup
+        coroutineScope.launch {
+            hostReachable.value = pingHostAsync(SparkOneBrain)
+        }
 
         textToSpeech = TextToSpeech(this, TextToSpeech.OnInitListener { status ->
             if (status == TextToSpeech.SUCCESS) {
@@ -76,24 +84,35 @@ class MainActivity : ComponentActivity() {
                         chatState = chatState,
                         onSendPrompt = { prompt ->
                             coroutineScope.launch {
-                                try {
-                                    val apiRequest = ApiRequest(
-                                        messages = listOf(
-                                            Message(
-                                                role = "user",
-                                                content = prompt
+                                hostReachable.value = pingHostAsync(SparkOneBrain)
+                                if (hostReachable.value) {
+                                    try {
+                                        val apiRequest = ApiRequest(
+                                            messages = listOf(
+                                                Message(
+                                                    role = "user",
+                                                    content = prompt
+                                                )
                                             )
                                         )
-                                    )
-                                    val response = apiService.generateResponse(apiRequest)
-                                    handleApiResponse(response)
-                                } catch (e: SocketTimeoutException) {
-                                    val timeoutMessage = Message(
+                                        val response = apiService.generateResponse(apiRequest)
+                                        handleApiResponse(response)
+                                    } catch (e: SocketTimeoutException) {
+                                        val timeoutMessage = Message(
+                                            role = "system",
+                                            content = "Socket Timeout Exception"
+                                        )
+                                        chatState.value = chatState.value.copy(
+                                            messages = chatState.value.messages + timeoutMessage
+                                        )
+                                    }
+                                } else {
+                                    val networkErrorMessage = Message(
                                         role = "system",
-                                        content = "Socket Timeout Exception"
+                                        content = "Network Connectivity Error. Please Check your Internet Connection and Try Again."
                                     )
                                     chatState.value = chatState.value.copy(
-                                        messages = chatState.value.messages + timeoutMessage
+                                        messages = chatState.value.messages + networkErrorMessage
                                     )
                                 }
                             }
@@ -229,7 +248,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            PingResult(host = "74.137.26.51")
+            PingResult(host = SparkOneBrain)
         }
     }
 
@@ -252,7 +271,6 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun PingResult(host: String) {
-        val hostReachable = remember { mutableStateOf(false) }
         val coroutineScope = rememberCoroutineScope()
 
         LaunchedEffect(Unit) {
@@ -262,7 +280,7 @@ class MainActivity : ComponentActivity() {
         }
 
         Text(
-            text = if (hostReachable.value) "Remote Host Reachable" else "Remote Host Unreachable",
+            text = if (hostReachable.value) "SparkOne Brain Online" else "SparkOne Brain Unreachable",
             color = if (hostReachable.value) Color.Green else Color.Red,
             modifier = Modifier.padding(16.dp)
         )

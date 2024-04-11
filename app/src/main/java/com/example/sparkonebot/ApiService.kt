@@ -6,13 +6,14 @@ import retrofit2.http.Body
 import retrofit2.http.POST
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import com.example.sparkonebot.SparkOneBrain
 
 interface ApiService {
     @POST("/v1/chat/completions")
     suspend fun generateResponse(@Body request: ApiRequest): ApiResponse
 
     companion object {
-        private const val BASE_URL = "http://74.137.26.51:5000/"
+        private const val BASE_URL = "http://$SparkOneBrain:5000/"
 
         fun create(): ApiService {
             val client = OkHttpClient.Builder()
