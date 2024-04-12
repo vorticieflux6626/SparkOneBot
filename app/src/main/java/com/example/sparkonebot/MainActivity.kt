@@ -36,6 +36,7 @@ import com.example.sparkonebot.ui.theme.Navy
 import com.example.sparkonebot.ui.theme.SparkOneBotTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -185,10 +186,28 @@ class MainActivity : ComponentActivity() {
         onSendPrompt: (String) -> Unit
     ) {
         val scrollState = rememberLazyListState()
+        val animationState = remember { mutableStateOf(0) }
+        val coroutineScope = rememberCoroutineScope()
+        val isAnimationVisible = remember { mutableStateOf(false) }
 
         LaunchedEffect(chatState.value.messages.size) {
             if (chatState.value.messages.isNotEmpty()) {
+                val lastMessage = chatState.value.messages.last()
+                if (lastMessage.role == "user") {
+                    isAnimationVisible.value = true
+                } else {
+                    isAnimationVisible.value = false
+                }
                 scrollState.animateScrollToItem(chatState.value.messages.size - 1)
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(300)
+                if (isAnimationVisible.value) {
+                    animationState.value = (animationState.value + 1) % 5
+                }
             }
         }
 
@@ -200,6 +219,9 @@ class MainActivity : ComponentActivity() {
             ) {
                 items(chatState.value.messages) { message ->
                     MessageItem(message)
+                    if (message.role == "user" && isAnimationVisible.value) {
+                        LoadingAnimation(animationState.value)
+                    }
                 }
             }
 
@@ -250,6 +272,25 @@ class MainActivity : ComponentActivity() {
 
             PingResult(host = SparkOneBrain)
         }
+    }
+
+    @Composable
+    fun LoadingAnimation(frame: Int) {
+        val animationText = remember {
+            listOf(
+                "Working ....",
+                "Working o...",
+                "Working .o..",
+                "Working ..o.",
+                "Working ...o"
+            )
+        }
+
+        Text(
+            text = animationText[frame],
+            color = Gold,
+            modifier = Modifier.padding(16.dp)
+        )
     }
 
     @Composable
