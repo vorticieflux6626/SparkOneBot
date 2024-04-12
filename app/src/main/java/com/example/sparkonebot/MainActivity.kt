@@ -1,10 +1,10 @@
 package com.example.sparkonebot
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
@@ -29,11 +29,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.example.sparkonebot.ui.theme.Gold
 import com.example.sparkonebot.ui.theme.Navy
 import com.example.sparkonebot.ui.theme.SparkOneBotTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
@@ -56,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private val coroutineScope = MainScope()
     private val chatState = mutableStateOf(ChatState())
     private var textToSpeech: TextToSpeech? = null
+    private val isIntroAnimationFinished = mutableStateOf(false)
 
     companion object {
         private const val SPEECH_REQUEST_CODE = 1
@@ -75,51 +78,13 @@ class MainActivity : ComponentActivity() {
             }
         })
 
+        if (savedInstanceState != null) {
+            isIntroAnimationFinished.value = savedInstanceState.getBoolean("isIntroAnimationFinished", false)
+        }
+
         setContent {
             SparkOneBotTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = Navy
-                ) {
-                    ChatScreen(
-                        chatState = chatState,
-                        onSendPrompt = { prompt ->
-                            coroutineScope.launch {
-                                hostReachable.value = pingHostAsync(SparkOneBrain)
-                                if (hostReachable.value) {
-                                    try {
-                                        val apiRequest = ApiRequest(
-                                            messages = listOf(
-                                                Message(
-                                                    role = "user",
-                                                    content = prompt
-                                                )
-                                            )
-                                        )
-                                        val response = apiService.generateResponse(apiRequest)
-                                        handleApiResponse(response)
-                                    } catch (e: SocketTimeoutException) {
-                                        val timeoutMessage = Message(
-                                            role = "system",
-                                            content = "Socket Timeout Exception"
-                                        )
-                                        chatState.value = chatState.value.copy(
-                                            messages = chatState.value.messages + timeoutMessage
-                                        )
-                                    }
-                                } else {
-                                    val networkErrorMessage = Message(
-                                        role = "system",
-                                        content = "Network Connectivity Error. Please Check your Internet Connection and Try Again."
-                                    )
-                                    chatState.value = chatState.value.copy(
-                                        messages = chatState.value.messages + networkErrorMessage
-                                    )
-                                }
-                            }
-                        }
-                    )
-                }
+                MainScreen(chatState, apiService, coroutineScope, isIntroAnimationFinished)
             }
         }
     }
@@ -127,6 +92,7 @@ class MainActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putSerializable("chatState", chatState.value)
+        outState.putBoolean("isIntroAnimationFinished", isIntroAnimationFinished.value)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
@@ -177,6 +143,69 @@ class MainActivity : ComponentActivity() {
     private suspend fun pingHostAsync(host: String): Boolean {
         return withContext(Dispatchers.IO) {
             pingHost(host)
+        }
+    }
+
+    @Composable
+    fun MainScreen(
+        chatState: MutableState<ChatState>,
+        apiService: ApiService,
+        coroutineScope: CoroutineScope,
+        isIntroAnimationFinished: MutableState<Boolean>
+    ) {
+        val backgroundColor = if (isIntroAnimationFinished.value) Navy else Color.Black
+        val configuration = LocalConfiguration.current
+
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = backgroundColor
+        ) {
+            if (!isIntroAnimationFinished.value && configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+                IntroScreen(
+                    onAnimationFinished = {
+                        isIntroAnimationFinished.value = true
+                    }
+                )
+            } else {
+                ChatScreen(
+                    chatState = chatState,
+                    onSendPrompt = { prompt ->
+                        coroutineScope.launch {
+                            hostReachable.value = pingHostAsync(SparkOneBrain)
+                            if (hostReachable.value) {
+                                try {
+                                    val apiRequest = ApiRequest(
+                                        messages = listOf(
+                                            Message(
+                                                role = "user",
+                                                content = prompt
+                                            )
+                                        )
+                                    )
+                                    val response = apiService.generateResponse(apiRequest)
+                                    handleApiResponse(response)
+                                } catch (e: SocketTimeoutException) {
+                                    val timeoutMessage = Message(
+                                        role = "system",
+                                        content = "Socket Timeout Exception"
+                                    )
+                                    chatState.value = chatState.value.copy(
+                                        messages = chatState.value.messages + timeoutMessage
+                                    )
+                                }
+                            } else {
+                                val networkErrorMessage = Message(
+                                    role = "system",
+                                    content = "Network Connectivity Error. Please Check your Internet Connection and Try Again."
+                                )
+                                chatState.value = chatState.value.copy(
+                                    messages = chatState.value.messages + networkErrorMessage
+                                )
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
 
