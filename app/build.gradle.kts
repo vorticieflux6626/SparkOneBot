@@ -67,10 +67,10 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    // Added dependencies
-    implementation("androidx.appcompat:appcompat:1.4.1")
-    implementation("androidx.compose.ui:ui:1.2.0")
-    implementation("androidx.compose.material:material:1.2.0")
+    // Added dependencies (Version specific)
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.compose.ui:ui:1.6.6")
+    implementation("androidx.compose.material:material:1.6.6")
     implementation("androidx.compose.runtime:runtime:1.2.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.0")
@@ -78,4 +78,5 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.10.0")
     implementation("androidx.compose.material:material-icons-core-android:1.5.0")
+
 }

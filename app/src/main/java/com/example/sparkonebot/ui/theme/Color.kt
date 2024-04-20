@@ -12,4 +12,7 @@ val Pink40 = Color(0xFF7D5260)
 
 val Navy = Color(0xFF000080) // Dark blue color
 val Gold = Color(0xFFFFD700) // Golden color
-
+val White = Color(0xFFFFFFFF) // White color
+val Green = Color(0xFF00FF00) // Green color
+val Black = Color(0xFF000000) // Black color
+val LightBlue = Color(0xFFCCE5FF) // Light Blue (Selection Highlight Color)

@@ -14,6 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Button
 import androidx.compose.material.Icon
 import androidx.compose.material.Surface
@@ -26,14 +33,17 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.composed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.dp
 import com.example.sparkonebot.ui.theme.Gold
 import com.example.sparkonebot.ui.theme.Navy
+import com.example.sparkonebot.ui.theme.LightBlue
 import com.example.sparkonebot.ui.theme.SparkOneBotTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +131,10 @@ class MainActivity : ComponentActivity() {
     private fun handleApiResponse(response: ApiResponse) {
         if (response.choices.isNotEmpty()) {
             val message = response.choices[0].message
-            chatState.value = chatState.value.copy(messages = chatState.value.messages + message)
+            chatState.value = chatState.value.copy(
+                messages = chatState.value.messages + message,
+                isAnimationVisible = false // Set isAnimationVisible to false
+            )
             speak(message.content)
         }
     }
@@ -215,28 +228,11 @@ class MainActivity : ComponentActivity() {
         onSendPrompt: (String) -> Unit
     ) {
         val scrollState = rememberLazyListState()
-        val animationState = remember { mutableStateOf(0) }
-        val coroutineScope = rememberCoroutineScope()
-        val isAnimationVisible = remember { mutableStateOf(false) }
+        val latestUserMessageId = remember { mutableStateOf<String?>(null) }
 
         LaunchedEffect(chatState.value.messages.size) {
             if (chatState.value.messages.isNotEmpty()) {
-                val lastMessage = chatState.value.messages.last()
-                if (lastMessage.role == "user") {
-                    isAnimationVisible.value = true
-                } else {
-                    isAnimationVisible.value = false
-                }
                 scrollState.animateScrollToItem(chatState.value.messages.size - 1)
-            }
-        }
-
-        LaunchedEffect(Unit) {
-            while (true) {
-                delay(300)
-                if (isAnimationVisible.value) {
-                    animationState.value = (animationState.value + 1) % 5
-                }
             }
         }
 
@@ -248,8 +244,8 @@ class MainActivity : ComponentActivity() {
             ) {
                 items(chatState.value.messages) { message ->
                     MessageItem(message)
-                    if (message.role == "user" && isAnimationVisible.value) {
-                        LoadingAnimation(animationState.value)
+                    if (message.role == "user" && message.id == latestUserMessageId.value && chatState.value.isAnimationVisible) {
+                        LoadingAnimation()
                     }
                 }
             }
@@ -266,11 +262,14 @@ class MainActivity : ComponentActivity() {
                     onClick = {
                         val prompt = chatState.value.inputText.trim()
                         if (prompt.isNotEmpty()) {
-                            val message = Message("user", prompt)
+                            val messageId = UUID.randomUUID().toString()
+                            val message = Message("user", prompt, messageId)
                             chatState.value = chatState.value.copy(
                                 messages = chatState.value.messages + message,
-                                inputText = ""
+                                inputText = "",
+                                isAnimationVisible = true
                             )
+                            latestUserMessageId.value = messageId
                             onSendPrompt(prompt)
                         }
                     },
@@ -304,7 +303,16 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun LoadingAnimation(frame: Int) {
+    fun LoadingAnimation() {
+        val animationState = remember { mutableStateOf(0) }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(300)
+                animationState.value = (animationState.value + 1) % 5
+            }
+        }
+
         val animationText = remember {
             listOf(
                 "Working ....",
@@ -316,7 +324,7 @@ class MainActivity : ComponentActivity() {
         }
 
         Text(
-            text = animationText[frame],
+            text = animationText[animationState.value],
             color = Gold,
             modifier = Modifier.padding(16.dp)
         )
@@ -325,16 +333,28 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun MessageItem(message: Message) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row {
-                Text(
-                    text = "${message.role}: ",
-                    color = Color.Green,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Text(
-                    text = message.content,
-                    color = Gold
-                )
+            SelectionContainer {
+                Row {
+                    Text(
+                        text = "${message.role}: ",
+                        color = Color.Green,
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .disableSelection()
+                    )
+                    Text(
+                        text = message.content,
+                        color = Gold,
+                        modifier = Modifier
+                            .selectable(
+                                selected = false,
+                                onClick = {},
+                                indication = rememberRipple(bounded = true, color = LightBlue),
+                                interactionSource = remember { MutableInteractionSource() }
+                            )
+                            .background(Navy)
+                    )
+                }
             }
         }
     }
@@ -357,12 +377,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun Modifier.disableSelection(): Modifier = composed {
+    this.pointerInput(Unit) {
+        detectTapGestures {
+            // Do nothing, effectively disabling selection for this modifier
+        }
+    }
+}
+
+data class Selection(val start: Int, val end: Int)
+
 data class ChatState(
     val messages: List<Message> = emptyList(),
-    val inputText: String = ""
+    val inputText: String = "",
+    val isAnimationVisible: Boolean = false // Add isAnimationVisible property
 ) : Serializable
 
 data class Message(
     val role: String,
-    val content: String
+    val content: String,
+    val id: String = ""
 ) : Serializable
