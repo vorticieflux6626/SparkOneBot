@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.selection.SelectionContainer
+//import androidx.compose.foundation.text.width
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Button
@@ -38,6 +40,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+//import androidx.compose.ui.Modifier.width
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
@@ -304,29 +307,19 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun LoadingAnimation() {
-        val animationState = remember { mutableStateOf(0) }
-
-        LaunchedEffect(Unit) {
-            while (true) {
-                delay(300)
-                animationState.value = (animationState.value + 1) % 5
-            }
-        }
-
-        val animationText = remember {
-            listOf(
-                "Working ....",
-                "Working o...",
-                "Working .o..",
-                "Working ..o.",
-                "Working ...o"
-            )
-        }
-
-        Text(
-            text = animationText[animationState.value],
-            color = Gold,
+        IndeterminateCircularIndicator(
             modifier = Modifier.padding(16.dp)
+        )
+    }
+
+    @Composable
+    fun IndeterminateCircularIndicator(
+        modifier: Modifier = Modifier
+    ) {
+        CircularProgressIndicator(
+            modifier = modifier.width(16.dp),
+            color = Gold,
+            //trackColor = LightBlue,
         )
     }
 
