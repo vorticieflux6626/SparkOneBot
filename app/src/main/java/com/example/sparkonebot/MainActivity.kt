@@ -1,5 +1,6 @@
 package com.example.sparkonebot
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
@@ -7,59 +8,34 @@ import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.selection.SelectionContainer
-//import androidx.compose.foundation.text.width
-import androidx.compose.material.ripple.rememberRipple
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Button
-import androidx.compose.material.Icon
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
-import androidx.compose.material.TextField
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.composed
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.rounded.Phone
+import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-//import androidx.compose.ui.Modifier.width
+import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
-import com.example.sparkonebot.ui.theme.Gold
-import com.example.sparkonebot.ui.theme.Navy
-import com.example.sparkonebot.ui.theme.LightBlue
-import com.example.sparkonebot.ui.theme.SparkOneBotTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import androidx.compose.ui.unit.dp
+import com.example.sparkonebot.ui.theme.*
+import kotlinx.coroutines.*
 import java.io.IOException
 import java.io.Serializable
 import java.net.InetAddress
 import java.net.SocketTimeoutException
 import java.util.*
-import androidx.compose.material.icons.rounded.Phone
 
 // Global Variables
 val MyAppIcons = Icons.Rounded
@@ -162,6 +138,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @SuppressLint("UnusedMaterialScaffoldPaddingParameter")
     @Composable
     fun MainScreen(
         chatState: MutableState<ChatState>,
@@ -171,60 +148,120 @@ class MainActivity : ComponentActivity() {
     ) {
         val backgroundColor = if (isIntroAnimationFinished.value) Navy else Color.Black
         val configuration = LocalConfiguration.current
+        val scaffoldState = rememberScaffoldState()
+        val scope = rememberCoroutineScope()
+        val drawerState = rememberDrawerState(DrawerValue.Closed)
 
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = backgroundColor
-        ) {
-            if (!isIntroAnimationFinished.value && configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
-                IntroScreen(
-                    onAnimationFinished = {
-                        isIntroAnimationFinished.value = true
-                    }
-                )
-            } else {
-                ChatScreen(
-                    chatState = chatState,
-                    onSendPrompt = { prompt ->
-                        coroutineScope.launch {
-                            hostReachable.value = pingHostAsync(SparkOneBrain)
-                            if (hostReachable.value) {
-                                try {
-                                    val apiRequest = ApiRequest(
-                                        messages = listOf(
-                                            Message(
-                                                role = "user",
-                                                content = prompt
-                                            )
-                                        )
-                                    )
-                                    val response = apiService.generateResponse(apiRequest)
-                                    handleApiResponse(response)
-                                } catch (e: SocketTimeoutException) {
-                                    val timeoutMessage = Message(
-                                        role = "system",
-                                        content = "Socket Timeout Exception"
-                                    )
-                                    chatState.value = chatState.value.copy(
-                                        messages = chatState.value.messages + timeoutMessage
-                                    )
-                                }
-                            } else {
-                                val networkErrorMessage = Message(
-                                    role = "system",
-                                    content = "Network Connectivity Error. Please Check your Internet Connection and Try Again."
-                                )
-                                chatState.value = chatState.value.copy(
-                                    messages = chatState.value.messages + networkErrorMessage
-                                )
-                            }
+        ModalDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = scaffoldState.drawerState.isOpen,
+            drawerContent = {
+                DrawerContent(
+                    onClose = {
+                        scope.launch {
+                            drawerState.close()
                         }
                     }
                 )
             }
+        ) {
+            Scaffold(
+                scaffoldState = scaffoldState,
+                topBar = {
+                    TopAppBar(
+                        title = { Text(text = "SparkOneBot") },
+                        navigationIcon = {
+                            IconButton(onClick = {
+                                scope.launch {
+                                    drawerState.open()
+                                }
+                            }) {
+                                Icon(Icons.Default.Menu, contentDescription = "Menu")
+                            }
+                        }
+                    )
+                }
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = backgroundColor
+                ) {
+                    if (!isIntroAnimationFinished.value && configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+                        IntroScreen(
+                            onAnimationFinished = {
+                                isIntroAnimationFinished.value = true
+                            }
+                        )
+                    } else {
+                        ChatScreen(
+                            chatState = chatState,
+                            onSendPrompt = { prompt ->
+                                coroutineScope.launch {
+                                    hostReachable.value = pingHostAsync(SparkOneBrain)
+                                    if (hostReachable.value) {
+                                        try {
+                                            val apiRequest = ApiRequest(
+                                                messages = listOf(
+                                                    Message(
+                                                        role = "user",
+                                                        content = prompt
+                                                    )
+                                                )
+                                            )
+                                            val response = apiService.generateResponse(apiRequest)
+                                            handleApiResponse(response)
+                                        } catch (e: SocketTimeoutException) {
+                                            val timeoutMessage = Message(
+                                                role = "system",
+                                                content = "Socket Timeout Exception"
+                                            )
+                                            chatState.value = chatState.value.copy(
+                                                messages = chatState.value.messages + timeoutMessage
+                                            )
+                                        }
+                                    } else {
+                                        val networkErrorMessage = Message(
+                                            role = "system",
+                                            content = "Network Connectivity Error. Please Check your Internet Connection and Try Again."
+                                        )
+                                        chatState.value = chatState.value.copy(
+                                            messages = chatState.value.messages + networkErrorMessage
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 
+    @Composable
+    fun DrawerContent(onClose: () -> Unit) {
+        Column {
+            Text(
+                text = "Models",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clickable {
+                        onClose()
+                        /* Handle click event for Models */
+                    }
+            )
+            Text(
+                text = "Log",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clickable {
+                        onClose()
+                        /* Handle click event for Log */
+                    }
+            )
+        }
+    }
     @Composable
     fun ChatScreen(
         chatState: MutableState<ChatState>,
